@@ -1,25 +1,10 @@
 <?php
-/*
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * This software consists of voluntary contributions made by many individuals
- * and is licensed under the LGPL. For more information, see
- * <http://www.doctrine-project.org>.
-*/
 
 namespace Doctrine\DBAL\Migrations;
 
 use Doctrine\DBAL\Migrations\Configuration\Configuration;
+use Doctrine\DBAL\Migrations\Event\MigrationsEventArgs;
+use const COUNT_RECURSIVE;
 
 /**
  * Class for running migrations to the current version or a manually specified version.
@@ -44,14 +29,20 @@ class Migration
     private $configuration;
 
     /**
+     * @var boolean
+     */
+    private $noMigrationException;
+
+    /**
      * Construct a Migration instance
      *
      * @param Configuration $configuration A migration Configuration instance
      */
     public function __construct(Configuration $configuration)
     {
-        $this->configuration = $configuration;
-        $this->outputWriter = $configuration->getOutputWriter();
+        $this->configuration        = $configuration;
+        $this->outputWriter         = $configuration->getOutputWriter();
+        $this->noMigrationException = false;
     }
 
     /**
@@ -77,94 +68,134 @@ class Migration
      */
     public function writeSqlFile($path, $to = null)
     {
-        $sql = $this->getSql($to);
-
+        $sql  = $this->getSql($to);
         $from = $this->configuration->getCurrentVersion();
+
         if ($to === null) {
             $to = $this->configuration->getLatestVersion();
         }
 
-        $direction = $from > $to ? 'down' : 'up';
+        $direction = $from > $to ? Version::DIRECTION_DOWN : Version::DIRECTION_UP;
 
-        $string  = sprintf("# Doctrine Migration File Generated on %s\n", date('Y-m-d H:i:s'));
-        $string .= sprintf("# Migrating from %s to %s\n", $from, $to);
+        $this->outputWriter->write(sprintf("-- Migrating from %s to %s\n", $from, $to));
 
-        foreach ($sql as $version => $queries) {
-            $string .= "\n# Version " . $version . "\n";
-            foreach ($queries as $query) {
-                $string .= $query . ";\n";
-            }
-            if ($direction == "down") {
-                $string .= "DELETE FROM " . $this->configuration->getMigrationsTableName() . " WHERE version = '" . $version . "';\n";
-            } else {
-                $string .= "INSERT INTO " . $this->configuration->getMigrationsTableName() . " (version) VALUES ('" . $version . "');\n";
-            }
-        }
-        if (is_dir($path)) {
-            $path = realpath($path);
-            $path = $path . '/doctrine_migration_' . date('YmdHis') . '.sql';
-        }
+        /*
+         * Since the configuration object changes during the creation we cannot inject things
+         * properly, so I had to violate LoD here (so please, let's find a way to solve it on v2).
+         */
+        return $this->configuration->getQueryWriter()
+                                   ->write($path, $direction, $sql);
+    }
 
-        $this->outputWriter->write("\n".sprintf('Writing migration file to "<info>%s</info>"', $path));
-
-        return file_put_contents($path, $string);
+    /**
+     * @param boolean $noMigrationException Throw an exception or not if no migration is found. Mostly for Continuous Integration.
+     */
+    public function setNoMigrationException($noMigrationException = false)
+    {
+        $this->noMigrationException = $noMigrationException;
     }
 
     /**
      * Run a migration to the current version or the given target version.
      *
-     * @param string  $to     The version to migrate to.
-     * @param boolean $dryRun Whether or not to make this a dry run and not execute anything.
+     * @param string  $to             The version to migrate to.
+     * @param boolean $dryRun         Whether or not to make this a dry run and not execute anything.
+     * @param boolean $timeAllQueries Measuring or not the execution time of each SQL query.
+     * @param callable|null $confirm A callback to confirm whether the migrations should be executed.
      *
-     * @return array $sql     The array of migration sql statements
+     * @return array An array of migration sql statements. This will be empty if the the $confirm callback declines to execute the migration
      *
      * @throws MigrationException
      */
-    public function migrate($to = null, $dryRun = false, $timeAllqueries=false)
+    public function migrate($to = null, $dryRun = false, $timeAllQueries = false, callable $confirm = null)
     {
+        /**
+         * If no version to migrate to is given we default to the last available one.
+         */
         if ($to === null) {
             $to = $this->configuration->getLatestVersion();
         }
 
-        $from = $this->configuration->getCurrentVersion();
-        $from = (string) $from;
-        $to = (string) $to;
+        $from = (string) $this->configuration->getCurrentVersion();
+        $to   = (string) $to;
 
+        /**
+         * Throw an error if we can't find the migration to migrate to in the registered
+         * migrations.
+         */
         $migrations = $this->configuration->getMigrations();
         if ( ! isset($migrations[$to]) && $to > 0) {
             throw MigrationException::unknownMigrationVersion($to);
         }
 
-        $direction = $from > $to ? 'down' : 'up';
+        $direction           = $from > $to ? Version::DIRECTION_DOWN : Version::DIRECTION_UP;
         $migrationsToExecute = $this->configuration->getMigrationsToExecute($direction, $to);
 
-        if ($from === $to && empty($migrationsToExecute) && $migrations) {
-            return array();
+        /**
+         * If
+         *  there are no migrations to execute
+         *  and there are migrations,
+         *  and the migration from and to are the same
+         * means we are already at the destination return an empty array()
+         * to signify that there is nothing left to do.
+         */
+        if ($from === $to && empty($migrationsToExecute) && ! empty($migrations)) {
+            return $this->noMigrations();
         }
 
-        if (! $dryRun) {
-            $this->outputWriter->write(sprintf('Migrating <info>%s</info> to <comment>%s</comment> from <comment>%s</comment>', $direction, $to, $from));
-        } else {
-            $this->outputWriter->write(sprintf('Executing dry run of migration <info>%s</info> to <comment>%s</comment> from <comment>%s</comment>', $direction, $to, $from));
+        if ( ! $dryRun && false === $this->migrationsCanExecute($confirm)) {
+            return [];
         }
 
-        if (empty($migrationsToExecute)) {
+        $output  = $dryRun ? 'Executing dry run of migration' : 'Migrating';
+        $output .= ' <info>%s</info> to <comment>%s</comment> from <comment>%s</comment>';
+        $this->outputWriter->write(sprintf($output, $direction, $to, $from));
+
+        /**
+         * If there are no migrations to execute throw an exception.
+         */
+        if (empty($migrationsToExecute) && ! $this->noMigrationException) {
             throw MigrationException::noMigrationsToExecute();
+        } elseif (empty($migrationsToExecute)) {
+            return $this->noMigrations();
         }
 
-        $sql = array();
+        $this->configuration->dispatchEvent(
+            Events::onMigrationsMigrating,
+            new MigrationsEventArgs($this->configuration, $direction, $dryRun)
+        );
+
+        $sql  = [];
         $time = 0;
+
         foreach ($migrationsToExecute as $version) {
-            $versionSql = $version->execute($direction, $dryRun, $timeAllqueries);
+            $versionSql                  = $version->execute($direction, $dryRun, $timeAllQueries);
             $sql[$version->getVersion()] = $versionSql;
-            $time += $version->getTime();
+            $time                       += $version->getTime();
         }
+
+        $this->configuration->dispatchEvent(
+            Events::onMigrationsMigrated,
+            new MigrationsEventArgs($this->configuration, $direction, $dryRun)
+        );
 
         $this->outputWriter->write("\n  <comment>------------------------</comment>\n");
-        $this->outputWriter->write(sprintf("  <info>++</info> finished in %s", $time));
+        $this->outputWriter->write(sprintf("  <info>++</info> finished in %ss", $time));
         $this->outputWriter->write(sprintf("  <info>++</info> %s migrations executed", count($migrationsToExecute)));
-        $this->outputWriter->write(sprintf("  <info>++</info> %s sql queries", count($sql, true) - count($sql)));
+        $this->outputWriter->write(sprintf("  <info>++</info> %s sql queries", count($sql, COUNT_RECURSIVE) - count($sql)));
 
         return $sql;
+    }
+
+    private function noMigrations() : array
+    {
+        $this->outputWriter->write('<comment>No migrations to execute.</comment>');
+
+        return [];
+    }
+
+    private function migrationsCanExecute(callable $confirm = null) : bool
+    {
+        return null === $confirm ? true : (bool) $confirm();
     }
 }

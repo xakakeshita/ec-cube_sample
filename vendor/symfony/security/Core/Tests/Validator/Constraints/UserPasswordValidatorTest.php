@@ -16,15 +16,14 @@ use Symfony\Component\Security\Core\Encoder\EncoderFactoryInterface;
 use Symfony\Component\Security\Core\Encoder\PasswordEncoderInterface;
 use Symfony\Component\Security\Core\Validator\Constraints\UserPassword;
 use Symfony\Component\Security\Core\Validator\Constraints\UserPasswordValidator;
-use Symfony\Component\Validator\Tests\Constraints\AbstractConstraintValidatorTest;
+use Symfony\Component\Validator\Test\ConstraintValidatorTestCase;
 
 /**
  * @author Bernhard Schussek <bschussek@gmail.com>
  */
-abstract class UserPasswordValidatorTest extends AbstractConstraintValidatorTest
+abstract class UserPasswordValidatorTest extends ConstraintValidatorTestCase
 {
     const PASSWORD = 's3Cr3t';
-
     const SALT = '^S4lt$';
 
     /**
@@ -59,9 +58,9 @@ abstract class UserPasswordValidatorTest extends AbstractConstraintValidatorTest
 
     public function testPasswordIsValid()
     {
-        $constraint = new UserPassword(array(
+        $constraint = new UserPassword([
             'message' => 'myMessage',
-        ));
+        ]);
 
         $this->encoder->expects($this->once())
             ->method('isPasswordValid')
@@ -75,9 +74,9 @@ abstract class UserPasswordValidatorTest extends AbstractConstraintValidatorTest
 
     public function testPasswordIsNotValid()
     {
-        $constraint = new UserPassword(array(
+        $constraint = new UserPassword([
             'message' => 'myMessage',
-        ));
+        ]);
 
         $this->encoder->expects($this->once())
             ->method('isPasswordValid')
@@ -88,6 +87,29 @@ abstract class UserPasswordValidatorTest extends AbstractConstraintValidatorTest
 
         $this->buildViolation('myMessage')
             ->assertRaised();
+    }
+
+    /**
+     * @dataProvider emptyPasswordData
+     */
+    public function testEmptyPasswordsAreNotValid($password)
+    {
+        $constraint = new UserPassword([
+            'message' => 'myMessage',
+        ]);
+
+        $this->validator->validate($password, $constraint);
+
+        $this->buildViolation('myMessage')
+            ->assertRaised();
+    }
+
+    public function emptyPasswordData()
+    {
+        return [
+            [null],
+            [''],
+        ];
     }
 
     /**

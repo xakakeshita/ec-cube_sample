@@ -1,23 +1,8 @@
 <?php
-/*
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * This software consists of voluntary contributions made by many individuals
- * and is licensed under the LGPL. For more information, see
- * <http://www.doctrine-project.org>.
-*/
 
 namespace Doctrine\DBAL\Migrations;
+
+use \Doctrine\DBAL\Migrations\Finder\MigrationFinderInterface;
 
 /**
  * Class for Migrations specific exceptions
@@ -62,5 +47,61 @@ class MigrationException extends \Exception
     public static function configurationFileAlreadyLoaded()
     {
         return new self(sprintf('Migrations configuration file already loaded'), 8);
+    }
+
+    public static function yamlConfigurationNotAvailable() : self
+    {
+        return new self('Unable to load yaml configuration files, please `composer require symfony/yaml` load yaml configuration files');
+    }
+
+    public static function configurationIncompatibleWithFinder(
+        $configurationParameterName,
+        MigrationFinderInterface $finder
+    ) {
+        return new self(
+            sprintf(
+                'Configuration-parameter "%s" cannot be used with finder of type "%s"',
+                $configurationParameterName,
+                get_class($finder)
+            ),
+            9
+        );
+    }
+
+    public static function configurationNotValid($msg)
+    {
+        return new self($msg, 10);
+    }
+
+    /**
+     * @param string $migrationClass
+     * @param string $migrationNamespace
+     * @return MigrationException
+     */
+    public static function migrationClassNotFound($migrationClass, $migrationNamespace)
+    {
+        return new self(
+            sprintf(
+                'Migration class "%s" was not found. Is it placed in "%s" namespace?',
+                $migrationClass,
+                $migrationNamespace
+            )
+        );
+    }
+
+    /**
+     * @param string $migrationClass
+     * @return MigrationException
+     */
+    public static function migrationNotConvertibleToSql($migrationClass)
+    {
+        return new self(
+            sprintf(
+                'Migration class "%s" contains a prepared statement.
+                Unfortunately there is no cross platform way of outputing it as an sql string.
+                Do you want to write a PR for it ?',
+                $migrationClass
+            )
+        );
     }
 }

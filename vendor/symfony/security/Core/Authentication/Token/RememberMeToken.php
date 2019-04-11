@@ -20,24 +20,22 @@ use Symfony\Component\Security\Core\User\UserInterface;
  */
 class RememberMeToken extends AbstractToken
 {
-    private $key;
+    private $secret;
     private $providerKey;
 
     /**
-     * Constructor.
-     *
      * @param UserInterface $user
      * @param string        $providerKey
-     * @param string        $key
+     * @param string        $secret      A secret used to make sure the token is created by the app and not by a malicious client
      *
      * @throws \InvalidArgumentException
      */
-    public function __construct(UserInterface $user, $providerKey, $key)
+    public function __construct(UserInterface $user, $providerKey, $secret)
     {
         parent::__construct($user->getRoles());
 
-        if (empty($key)) {
-            throw new \InvalidArgumentException('$key must not be empty.');
+        if (empty($secret)) {
+            throw new \InvalidArgumentException('$secret must not be empty.');
         }
 
         if (empty($providerKey)) {
@@ -45,7 +43,7 @@ class RememberMeToken extends AbstractToken
         }
 
         $this->providerKey = $providerKey;
-        $this->key = $key;
+        $this->secret = $secret;
 
         $this->setUser($user);
         parent::setAuthenticated(true);
@@ -64,9 +62,9 @@ class RememberMeToken extends AbstractToken
     }
 
     /**
-     * Returns the provider key.
+     * Returns the provider secret.
      *
-     * @return string The provider key
+     * @return string The provider secret
      */
     public function getProviderKey()
     {
@@ -74,13 +72,13 @@ class RememberMeToken extends AbstractToken
     }
 
     /**
-     * Returns the key.
+     * Returns the secret.
      *
-     * @return string The Key
+     * @return string
      */
-    public function getKey()
+    public function getSecret()
     {
-        return $this->key;
+        return $this->secret;
     }
 
     /**
@@ -96,11 +94,9 @@ class RememberMeToken extends AbstractToken
      */
     public function serialize()
     {
-        return serialize(array(
-            $this->key,
-            $this->providerKey,
-            parent::serialize(),
-        ));
+        $serialized = [$this->secret, $this->providerKey, parent::serialize(true)];
+
+        return $this->doSerialize($serialized, \func_num_args() ? \func_get_arg(0) : null);
     }
 
     /**
@@ -108,7 +104,7 @@ class RememberMeToken extends AbstractToken
      */
     public function unserialize($serialized)
     {
-        list($this->key, $this->providerKey, $parentStr) = unserialize($serialized);
+        list($this->secret, $this->providerKey, $parentStr) = \is_array($serialized) ? $serialized : unserialize($serialized);
         parent::unserialize($parentStr);
     }
 }

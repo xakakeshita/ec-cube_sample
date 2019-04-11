@@ -11,10 +11,8 @@
 
 namespace Symfony\Bridge\Doctrine\Form\ChoiceList;
 
-use Symfony\Component\Form\Exception\UnexpectedTypeException;
-use Doctrine\ORM\QueryBuilder;
 use Doctrine\DBAL\Connection;
-use Doctrine\Common\Persistence\ObjectManager;
+use Doctrine\ORM\QueryBuilder;
 
 /**
  * Loads entities using a {@link QueryBuilder} instance.
@@ -37,42 +35,10 @@ class ORMQueryBuilderLoader implements EntityLoaderInterface
     /**
      * Construct an ORM Query Builder Loader.
      *
-     * @param QueryBuilder|\Closure $queryBuilder The query builder or a closure
-     *                                            for creating the query builder.
-     *                                            Passing a closure is
-     *                                            deprecated and will not be
-     *                                            supported anymore as of
-     *                                            Symfony 3.0.
-     * @param ObjectManager         $manager      Deprecated
-     * @param string                $class        Deprecated
-     *
-     * @throws UnexpectedTypeException
+     * @param QueryBuilder $queryBuilder The query builder for creating the query builder
      */
-    public function __construct($queryBuilder, $manager = null, $class = null)
+    public function __construct(QueryBuilder $queryBuilder)
     {
-        // If a query builder was passed, it must be a closure or QueryBuilder
-        // instance
-        if (!($queryBuilder instanceof QueryBuilder || $queryBuilder instanceof \Closure)) {
-            throw new UnexpectedTypeException($queryBuilder, 'Doctrine\ORM\QueryBuilder or \Closure');
-        }
-
-        if ($queryBuilder instanceof \Closure) {
-            @trigger_error('Passing a QueryBuilder closure to '.__CLASS__.'::__construct() is deprecated since version 2.7 and will be removed in 3.0.', E_USER_DEPRECATED);
-
-            if (!$manager instanceof ObjectManager) {
-                throw new UnexpectedTypeException($manager, 'Doctrine\Common\Persistence\ObjectManager');
-            }
-
-            @trigger_error('Passing an EntityManager to '.__CLASS__.'::__construct() is deprecated since version 2.7 and will be removed in 3.0.', E_USER_DEPRECATED);
-            @trigger_error('Passing a class to '.__CLASS__.'::__construct() is deprecated since version 2.7 and will be removed in 3.0.', E_USER_DEPRECATED);
-
-            $queryBuilder = $queryBuilder($manager->getRepository($class));
-
-            if (!$queryBuilder instanceof QueryBuilder) {
-                throw new UnexpectedTypeException($queryBuilder, 'Doctrine\ORM\QueryBuilder');
-            }
-        }
-
         $this->queryBuilder = $queryBuilder;
     }
 
@@ -98,7 +64,7 @@ class ORMQueryBuilderLoader implements EntityLoaderInterface
         // Guess type
         $entity = current($qb->getRootEntities());
         $metadata = $qb->getEntityManager()->getClassMetadata($entity);
-        if (in_array($metadata->getTypeOfField($identifier), array('integer', 'bigint', 'smallint'))) {
+        if (\in_array($metadata->getTypeOfField($identifier), ['integer', 'bigint', 'smallint'])) {
             $parameterType = Connection::PARAM_INT_ARRAY;
 
             // Filter out non-integer values (e.g. ""). If we don't, some
@@ -106,18 +72,18 @@ class ORMQueryBuilderLoader implements EntityLoaderInterface
             $values = array_values(array_filter($values, function ($v) {
                 return (string) $v === (string) (int) $v || ctype_digit($v);
             }));
-        } elseif ('guid' === $metadata->getTypeOfField($identifier)) {
+        } elseif (\in_array($metadata->getTypeOfField($identifier), ['uuid', 'guid'])) {
             $parameterType = Connection::PARAM_STR_ARRAY;
 
             // Like above, but we just filter out empty strings.
             $values = array_values(array_filter($values, function ($v) {
-                return (string) $v !== '';
+                return '' !== (string) $v;
             }));
         } else {
             $parameterType = Connection::PARAM_STR_ARRAY;
         }
         if (!$values) {
-            return array();
+            return [];
         }
 
         return $qb->andWhere($where)

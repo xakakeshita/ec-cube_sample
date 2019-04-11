@@ -11,12 +11,12 @@
 
 namespace Symfony\Component\Security\Http\Firewall;
 
-use Symfony\Component\Security\Core\Authentication\AuthenticationManagerInterface;
-use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
-use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpKernel\Event\GetResponseEvent;
+use Symfony\Component\Security\Core\Authentication\AuthenticationManagerInterface;
 use Symfony\Component\Security\Core\Authentication\Token\AnonymousToken;
+use Symfony\Component\Security\Core\Authentication\Token\Storage\TokenStorageInterface;
+use Symfony\Component\Security\Core\Exception\AuthenticationException;
 
 /**
  * AnonymousAuthenticationListener automatically adds a Token if none is
@@ -27,22 +27,20 @@ use Symfony\Component\Security\Core\Authentication\Token\AnonymousToken;
 class AnonymousAuthenticationListener implements ListenerInterface
 {
     private $tokenStorage;
-    private $key;
+    private $secret;
     private $authenticationManager;
     private $logger;
 
-    public function __construct(TokenStorageInterface $tokenStorage, $key, LoggerInterface $logger = null, AuthenticationManagerInterface $authenticationManager = null)
+    public function __construct(TokenStorageInterface $tokenStorage, $secret, LoggerInterface $logger = null, AuthenticationManagerInterface $authenticationManager = null)
     {
         $this->tokenStorage = $tokenStorage;
-        $this->key = $key;
+        $this->secret = $secret;
         $this->authenticationManager = $authenticationManager;
         $this->logger = $logger;
     }
 
     /**
      * Handles anonymous authentication.
-     *
-     * @param GetResponseEvent $event A GetResponseEvent instance
      */
     public function handle(GetResponseEvent $event)
     {
@@ -51,7 +49,7 @@ class AnonymousAuthenticationListener implements ListenerInterface
         }
 
         try {
-            $token = new AnonymousToken($this->key, 'anon.', array());
+            $token = new AnonymousToken($this->secret, 'anon.', []);
             if (null !== $this->authenticationManager) {
                 $token = $this->authenticationManager->authenticate($token);
             }
@@ -63,7 +61,7 @@ class AnonymousAuthenticationListener implements ListenerInterface
             }
         } catch (AuthenticationException $failed) {
             if (null !== $this->logger) {
-                $this->logger->info('Anonymous authentication failed.', array('exception' => $failed));
+                $this->logger->info('Anonymous authentication failed.', ['exception' => $failed]);
             }
         }
     }

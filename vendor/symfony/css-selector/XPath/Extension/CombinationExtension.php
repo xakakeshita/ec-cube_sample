@@ -20,6 +20,8 @@ use Symfony\Component\CssSelector\XPath\XPathExpr;
  * which is copyright Ian Bicking, @see https://github.com/SimonSapin/cssselect.
  *
  * @author Jean-François Simon <jeanfrancois.simon@sensiolabs.com>
+ *
+ * @internal
  */
 class CombinationExtension extends AbstractExtension
 {
@@ -28,18 +30,15 @@ class CombinationExtension extends AbstractExtension
      */
     public function getCombinationTranslators()
     {
-        return array(
-            ' ' => array($this, 'translateDescendant'),
-            '>' => array($this, 'translateChild'),
-            '+' => array($this, 'translateDirectAdjacent'),
-            '~' => array($this, 'translateIndirectAdjacent'),
-        );
+        return [
+            ' ' => [$this, 'translateDescendant'],
+            '>' => [$this, 'translateChild'],
+            '+' => [$this, 'translateDirectAdjacent'],
+            '~' => [$this, 'translateIndirectAdjacent'],
+        ];
     }
 
     /**
-     * @param XPathExpr $xpath
-     * @param XPathExpr $combinedXpath
-     *
      * @return XPathExpr
      */
     public function translateDescendant(XPathExpr $xpath, XPathExpr $combinedXpath)
@@ -48,9 +47,6 @@ class CombinationExtension extends AbstractExtension
     }
 
     /**
-     * @param XPathExpr $xpath
-     * @param XPathExpr $combinedXpath
-     *
      * @return XPathExpr
      */
     public function translateChild(XPathExpr $xpath, XPathExpr $combinedXpath)
@@ -59,9 +55,6 @@ class CombinationExtension extends AbstractExtension
     }
 
     /**
-     * @param XPathExpr $xpath
-     * @param XPathExpr $combinedXpath
-     *
      * @return XPathExpr
      */
     public function translateDirectAdjacent(XPathExpr $xpath, XPathExpr $combinedXpath)
@@ -73,9 +66,6 @@ class CombinationExtension extends AbstractExtension
     }
 
     /**
-     * @param XPathExpr $xpath
-     * @param XPathExpr $combinedXpath
-     *
      * @return XPathExpr
      */
     public function translateIndirectAdjacent(XPathExpr $xpath, XPathExpr $combinedXpath)

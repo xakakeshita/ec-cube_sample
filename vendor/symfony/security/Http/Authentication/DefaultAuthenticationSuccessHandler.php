@@ -11,9 +11,11 @@
 
 namespace Symfony\Component\Security\Http\Authentication;
 
-use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Http\HttpUtils;
+use Symfony\Component\Security\Http\ParameterBagUtils;
+use Symfony\Component\Security\Http\Util\TargetPathTrait;
 
 /**
  * Class with the default authentication success handling logic.
@@ -24,24 +26,24 @@ use Symfony\Component\Security\Http\HttpUtils;
  */
 class DefaultAuthenticationSuccessHandler implements AuthenticationSuccessHandlerInterface
 {
+    use TargetPathTrait;
+
     protected $httpUtils;
     protected $options;
     protected $providerKey;
-    protected $defaultOptions = array(
+    protected $defaultOptions = [
         'always_use_default_target_path' => false,
         'default_target_path' => '/',
         'login_path' => '/login',
         'target_path_parameter' => '_target_path',
         'use_referer' => false,
-    );
+    ];
 
     /**
-     * Constructor.
-     *
      * @param HttpUtils $httpUtils
      * @param array     $options   Options for processing a successful authentication attempt
      */
-    public function __construct(HttpUtils $httpUtils, array $options = array())
+    public function __construct(HttpUtils $httpUtils, array $options = [])
     {
         $this->httpUtils = $httpUtils;
         $this->setOptions($options);
@@ -65,11 +67,6 @@ class DefaultAuthenticationSuccessHandler implements AuthenticationSuccessHandle
         return $this->options;
     }
 
-    /**
-     * Sets the options.
-     *
-     * @param array $options An array of options
-     */
     public function setOptions(array $options)
     {
         $this->options = array_merge($this->defaultOptions, $options);
@@ -98,8 +95,6 @@ class DefaultAuthenticationSuccessHandler implements AuthenticationSuccessHandle
     /**
      * Builds the target URL according to the defined options.
      *
-     * @param Request $request
-     *
      * @return string
      */
     protected function determineTargetUrl(Request $request)
@@ -108,18 +103,23 @@ class DefaultAuthenticationSuccessHandler implements AuthenticationSuccessHandle
             return $this->options['default_target_path'];
         }
 
-        if ($targetUrl = $request->get($this->options['target_path_parameter'], null, true)) {
+        if ($targetUrl = ParameterBagUtils::getRequestParameterValue($request, $this->options['target_path_parameter'])) {
             return $targetUrl;
         }
 
-        if (null !== $this->providerKey && $targetUrl = $request->getSession()->get('_security.'.$this->providerKey.'.target_path')) {
-            $request->getSession()->remove('_security.'.$this->providerKey.'.target_path');
+        if (null !== $this->providerKey && $targetUrl = $this->getTargetPath($request->getSession(), $this->providerKey)) {
+            $this->removeTargetPath($request->getSession(), $this->providerKey);
 
             return $targetUrl;
         }
 
-        if ($this->options['use_referer'] && ($targetUrl = $request->headers->get('Referer')) && $targetUrl !== $this->httpUtils->generateUri($request, $this->options['login_path'])) {
-            return $targetUrl;
+        if ($this->options['use_referer'] && $targetUrl = $request->headers->get('Referer')) {
+            if (false !== $pos = strpos($targetUrl, '?')) {
+                $targetUrl = substr($targetUrl, 0, $pos);
+            }
+            if ($targetUrl && $targetUrl !== $this->httpUtils->generateUri($request, $this->options['login_path'])) {
+                return $targetUrl;
+            }
         }
 
         return $this->options['default_target_path'];

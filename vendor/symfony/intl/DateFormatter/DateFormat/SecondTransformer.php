@@ -15,6 +15,8 @@ namespace Symfony\Component\Intl\DateFormatter\DateFormat;
  * Parser and formatter for the second format.
  *
  * @author Igor Wiedler <igor@wiedler.ch>
+ *
+ * @internal
  */
 class SecondTransformer extends Transformer
 {
@@ -41,8 +43,8 @@ class SecondTransformer extends Transformer
      */
     public function extractDateOptions($matched, $length)
     {
-        return array(
+        return [
             'second' => (int) $matched,
-        );
+        ];
     }
 }

@@ -12,8 +12,11 @@
 namespace Symfony\Component\Form\Tests;
 
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Form\Form;
+use Symfony\Component\Form\FormConfigInterface;
+use Symfony\Component\Form\FormTypeExtensionInterface;
+use Symfony\Component\Form\FormTypeInterface;
 use Symfony\Component\Form\ResolvedFormType;
-use Symfony\Component\Form\FormBuilder;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
 /**
@@ -35,11 +38,35 @@ class ResolvedFormTypeTest extends TestCase
      * @var \PHPUnit_Framework_MockObject_MockObject
      */
     private $dataMapper;
+
+    /**
+     * @var \PHPUnit_Framework_MockObject_MockObject|FormTypeInterface
+     */
     private $parentType;
+
+    /**
+     * @var \PHPUnit_Framework_MockObject_MockObject|FormTypeInterface
+     */
     private $type;
+
+    /**
+     * @var \PHPUnit_Framework_MockObject_MockObject|FormTypeExtensionInterface
+     */
     private $extension1;
+
+    /**
+     * @var \PHPUnit_Framework_MockObject_MockObject|FormTypeExtensionInterface
+     */
     private $extension2;
+
+    /**
+     * @var ResolvedFormType
+     */
     private $parentResolvedType;
+
+    /**
+     * @var ResolvedFormType
+     */
     private $resolvedType;
 
     protected function setUp()
@@ -52,22 +79,20 @@ class ResolvedFormTypeTest extends TestCase
         $this->extension1 = $this->getMockFormTypeExtension();
         $this->extension2 = $this->getMockFormTypeExtension();
         $this->parentResolvedType = new ResolvedFormType($this->parentType);
-        $this->resolvedType = new ResolvedFormType($this->type, array($this->extension1, $this->extension2), $this->parentResolvedType);
+        $this->resolvedType = new ResolvedFormType($this->type, [$this->extension1, $this->extension2], $this->parentResolvedType);
     }
 
     public function testGetOptionsResolver()
     {
-        $test = $this;
         $i = 0;
 
-        $assertIndexAndAddOption = function ($index, $option, $default) use (&$i, $test) {
-            return function (OptionsResolver $resolver) use (&$i, $test, $index, $option, $default) {
-                /* @var TestCase $test */
-                $test->assertEquals($index, $i, 'Executed at index '.$index);
+        $assertIndexAndAddOption = function ($index, $option, $default) use (&$i) {
+            return function (OptionsResolver $resolver) use (&$i, $index, $option, $default) {
+                $this->assertEquals($index, $i, 'Executed at index '.$index);
 
                 ++$i;
 
-                $resolver->setDefaults(array($option => $default));
+                $resolver->setDefaults([$option => $default]);
             };
         };
 
@@ -90,8 +115,8 @@ class ResolvedFormTypeTest extends TestCase
             ->method('configureOptions')
             ->will($this->returnCallback($assertIndexAndAddOption(3, 'd', 'd_default')));
 
-        $givenOptions = array('a' => 'a_custom', 'c' => 'c_custom');
-        $resolvedOptions = array('a' => 'a_custom', 'b' => 'b_default', 'c' => 'c_custom', 'd' => 'd_default');
+        $givenOptions = ['a' => 'a_custom', 'c' => 'c_custom'];
+        $resolvedOptions = ['a' => 'a_custom', 'b' => 'b_default', 'c' => 'c_custom', 'd' => 'd_default'];
 
         $resolver = $this->resolvedType->getOptionsResolver();
 
@@ -100,13 +125,13 @@ class ResolvedFormTypeTest extends TestCase
 
     public function testCreateBuilder()
     {
-        $givenOptions = array('a' => 'a_custom', 'c' => 'c_custom');
-        $resolvedOptions = array('a' => 'a_custom', 'b' => 'b_default', 'c' => 'c_custom', 'd' => 'd_default');
-        $optionsResolver = $this->getMockBuilder('Symfony\Component\OptionsResolver\OptionsResolverInterface')->getMock();
+        $givenOptions = ['a' => 'a_custom', 'c' => 'c_custom'];
+        $resolvedOptions = ['a' => 'a_custom', 'b' => 'b_default', 'c' => 'c_custom', 'd' => 'd_default'];
+        $optionsResolver = $this->getMockBuilder('Symfony\Component\OptionsResolver\OptionsResolver')->getMock();
 
         $this->resolvedType = $this->getMockBuilder('Symfony\Component\Form\ResolvedFormType')
-            ->setConstructorArgs(array($this->type, array($this->extension1, $this->extension2), $this->parentResolvedType))
-            ->setMethods(array('getOptionsResolver'))
+            ->setConstructorArgs([$this->type, [$this->extension1, $this->extension2], $this->parentResolvedType])
+            ->setMethods(['getOptionsResolver'])
             ->getMock();
 
         $this->resolvedType->expects($this->once())
@@ -128,13 +153,13 @@ class ResolvedFormTypeTest extends TestCase
 
     public function testCreateBuilderWithDataClassOption()
     {
-        $givenOptions = array('data_class' => 'Foo');
-        $resolvedOptions = array('data_class' => '\stdClass');
-        $optionsResolver = $this->getMockBuilder('Symfony\Component\OptionsResolver\OptionsResolverInterface')->getMock();
+        $givenOptions = ['data_class' => 'Foo'];
+        $resolvedOptions = ['data_class' => '\stdClass'];
+        $optionsResolver = $this->getMockBuilder('Symfony\Component\OptionsResolver\OptionsResolver')->getMock();
 
         $this->resolvedType = $this->getMockBuilder('Symfony\Component\Form\ResolvedFormType')
-            ->setConstructorArgs(array($this->type, array($this->extension1, $this->extension2), $this->parentResolvedType))
-            ->setMethods(array('getOptionsResolver'))
+            ->setConstructorArgs([$this->type, [$this->extension1, $this->extension2], $this->parentResolvedType])
+            ->setMethods(['getOptionsResolver'])
             ->getMock();
 
         $this->resolvedType->expects($this->once())
@@ -156,19 +181,17 @@ class ResolvedFormTypeTest extends TestCase
 
     public function testBuildForm()
     {
-        $test = $this;
         $i = 0;
 
-        $assertIndex = function ($index) use (&$i, $test) {
-            return function () use (&$i, $test, $index) {
-                /* @var TestCase $test */
-                $test->assertEquals($index, $i, 'Executed at index '.$index);
+        $assertIndex = function ($index) use (&$i) {
+            return function () use (&$i, $index) {
+                $this->assertEquals($index, $i, 'Executed at index '.$index);
 
                 ++$i;
             };
         };
 
-        $options = array('a' => 'Foo', 'b' => 'Bar');
+        $options = ['a' => 'Foo', 'b' => 'Bar'];
         $builder = $this->getMockBuilder('Symfony\Component\Form\Test\FormBuilderInterface')->getMock();
 
         // First the form is built for the super type
@@ -199,7 +222,7 @@ class ResolvedFormTypeTest extends TestCase
 
     public function testCreateView()
     {
-        $form = $this->getMockBuilder('Symfony\Component\Form\Test\FormInterface')->getMock();
+        $form = new Form($this->getMockBuilder(FormConfigInterface::class)->getMock());
 
         $view = $this->resolvedType->createView($form);
 
@@ -209,7 +232,7 @@ class ResolvedFormTypeTest extends TestCase
 
     public function testCreateViewWithParent()
     {
-        $form = $this->getMockBuilder('Symfony\Component\Form\Test\FormInterface')->getMock();
+        $form = new Form($this->getMockBuilder(FormConfigInterface::class)->getMock());
         $parentView = $this->getMockBuilder('Symfony\Component\Form\FormView')->getMock();
 
         $view = $this->resolvedType->createView($form, $parentView);
@@ -220,17 +243,15 @@ class ResolvedFormTypeTest extends TestCase
 
     public function testBuildView()
     {
-        $options = array('a' => '1', 'b' => '2');
-        $form = $this->getMockBuilder('Symfony\Component\Form\Test\FormInterface')->getMock();
+        $options = ['a' => '1', 'b' => '2'];
+        $form = new Form($this->getMockBuilder(FormConfigInterface::class)->getMock());
         $view = $this->getMockBuilder('Symfony\Component\Form\FormView')->getMock();
 
-        $test = $this;
         $i = 0;
 
-        $assertIndex = function ($index) use (&$i, $test) {
-            return function () use (&$i, $test, $index) {
-                /* @var TestCase $test */
-                $test->assertEquals($index, $i, 'Executed at index '.$index);
+        $assertIndex = function ($index) use (&$i) {
+            return function () use (&$i, $index) {
+                $this->assertEquals($index, $i, 'Executed at index '.$index);
 
                 ++$i;
             };
@@ -264,17 +285,15 @@ class ResolvedFormTypeTest extends TestCase
 
     public function testFinishView()
     {
-        $options = array('a' => '1', 'b' => '2');
-        $form = $this->getMockBuilder('Symfony\Component\Form\Test\FormInterface')->getMock();
+        $options = ['a' => '1', 'b' => '2'];
+        $form = new Form($this->getMockBuilder(FormConfigInterface::class)->getMock());
         $view = $this->getMockBuilder('Symfony\Component\Form\FormView')->getMock();
 
-        $test = $this;
         $i = 0;
 
-        $assertIndex = function ($index) use (&$i, $test) {
-            return function () use (&$i, $test, $index) {
-                /* @var TestCase $test */
-                $test->assertEquals($index, $i, 'Executed at index '.$index);
+        $assertIndex = function ($index) use (&$i) {
+            return function () use (&$i, $index) {
+                $this->assertEquals($index, $i, 'Executed at index '.$index);
 
                 ++$i;
             };
@@ -306,12 +325,45 @@ class ResolvedFormTypeTest extends TestCase
         $this->resolvedType->finishView($view, $form, $options);
     }
 
+    public function testGetBlockPrefix()
+    {
+        $this->type->expects($this->once())
+            ->method('getBlockPrefix')
+            ->willReturn('my_prefix');
+
+        $resolvedType = new ResolvedFormType($this->type);
+
+        $this->assertSame('my_prefix', $resolvedType->getBlockPrefix());
+    }
+
+    /**
+     * @dataProvider provideTypeClassBlockPrefixTuples
+     */
+    public function testBlockPrefixDefaultsToFQCNIfNoName($typeClass, $blockPrefix)
+    {
+        $resolvedType = new ResolvedFormType(new $typeClass());
+
+        $this->assertSame($blockPrefix, $resolvedType->getBlockPrefix());
+    }
+
+    public function provideTypeClassBlockPrefixTuples()
+    {
+        return [
+            [__NAMESPACE__.'\Fixtures\FooType', 'foo'],
+            [__NAMESPACE__.'\Fixtures\Foo', 'foo'],
+            [__NAMESPACE__.'\Fixtures\Type', 'type'],
+            [__NAMESPACE__.'\Fixtures\FooBarHTMLType', 'foo_bar_html'],
+            [__NAMESPACE__.'\Fixtures\Foo1Bar2Type', 'foo1_bar2'],
+            [__NAMESPACE__.'\Fixtures\FBooType', 'f_boo'],
+        ];
+    }
+
     /**
      * @return \PHPUnit_Framework_MockObject_MockObject
      */
-    private function getMockFormType()
+    private function getMockFormType($typeClass = 'Symfony\Component\Form\AbstractType')
     {
-        return $this->getMockBuilder('Symfony\Component\Form\AbstractType')->setMethods(array('getName', 'configureOptions', 'finishView', 'buildView', 'buildForm'))->getMock();
+        return $this->getMockBuilder($typeClass)->setMethods(['getBlockPrefix', 'configureOptions', 'finishView', 'buildView', 'buildForm'])->getMock();
     }
 
     /**
@@ -319,7 +371,7 @@ class ResolvedFormTypeTest extends TestCase
      */
     private function getMockFormTypeExtension()
     {
-        return $this->getMockBuilder('Symfony\Component\Form\AbstractTypeExtension')->setMethods(array('getExtendedType', 'configureOptions', 'finishView', 'buildView', 'buildForm'))->getMock();
+        return $this->getMockBuilder('Symfony\Component\Form\AbstractTypeExtension')->setMethods(['getExtendedType', 'configureOptions', 'finishView', 'buildView', 'buildForm'])->getMock();
     }
 
     /**
@@ -328,16 +380,5 @@ class ResolvedFormTypeTest extends TestCase
     private function getMockFormFactory()
     {
         return $this->getMockBuilder('Symfony\Component\Form\FormFactoryInterface')->getMock();
-    }
-
-    /**
-     * @param string $name
-     * @param array  $options
-     *
-     * @return FormBuilder
-     */
-    protected function getBuilder($name = 'name', array $options = array())
-    {
-        return new FormBuilder($name, null, $this->dispatcher, $this->factory, $options);
     }
 }

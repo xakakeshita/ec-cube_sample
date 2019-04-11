@@ -20,7 +20,6 @@ use Symfony\Component\Security\Core\Encoder\BCryptPasswordEncoder;
 class BCryptPasswordEncoderTest extends TestCase
 {
     const PASSWORD = 'password';
-    const BYTES = '0123456789abcdef';
     const VALID_COST = '04';
 
     /**
@@ -50,7 +49,7 @@ class BCryptPasswordEncoderTest extends TestCase
     public function validRangeData()
     {
         $costs = range(4, 31);
-        array_walk($costs, function (&$cost) { $cost = array($cost); });
+        array_walk($costs, function (&$cost) { $cost = [$cost]; });
 
         return $costs;
     }
@@ -59,7 +58,7 @@ class BCryptPasswordEncoderTest extends TestCase
     {
         $encoder = new BCryptPasswordEncoder(self::VALID_COST);
         $result = $encoder->encodePassword(self::PASSWORD, null);
-        $this->assertEquals(60, strlen($result));
+        $this->assertEquals(60, \strlen($result));
     }
 
     public function testValidation()

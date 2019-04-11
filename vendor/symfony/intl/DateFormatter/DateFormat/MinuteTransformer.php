@@ -15,6 +15,8 @@ namespace Symfony\Component\Intl\DateFormatter\DateFormat;
  * Parser and formatter for minute format.
  *
  * @author Igor Wiedler <igor@wiedler.ch>
+ *
+ * @internal
  */
 class MinuteTransformer extends Transformer
 {
@@ -41,8 +43,8 @@ class MinuteTransformer extends Transformer
      */
     public function extractDateOptions($matched, $length)
     {
-        return array(
+        return [
             'minute' => (int) $matched,
-        );
+        ];
     }
 }

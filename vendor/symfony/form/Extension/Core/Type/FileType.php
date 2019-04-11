@@ -27,20 +27,37 @@ class FileType extends AbstractType
      */
     public function buildForm(FormBuilderInterface $builder, array $options)
     {
-        if ($options['multiple']) {
-            $builder->addEventListener(FormEvents::PRE_SUBMIT, function (FormEvent $event) {
-                $form = $event->getForm();
-                $data = $event->getData();
+        // Ensure that submitted data is always an uploaded file or an array of some
+        $builder->addEventListener(FormEvents::PRE_SUBMIT, function (FormEvent $event) use ($options) {
+            $form = $event->getForm();
+            $requestHandler = $form->getConfig()->getRequestHandler();
 
-                // submitted data for an input file (not required) without choosing any file
-                if (array(null) === $data) {
-                    $emptyData = $form->getConfig()->getEmptyData();
+            if ($options['multiple']) {
+                $data = [];
+                $files = $event->getData();
 
-                    $data = is_callable($emptyData) ? call_user_func($emptyData, $form, $data) : $emptyData;
-                    $event->setData($data);
+                if (!\is_array($files)) {
+                    $files = [];
                 }
-            });
-        }
+
+                foreach ($files as $file) {
+                    if ($requestHandler->isFileUpload($file)) {
+                        $data[] = $file;
+                    }
+                }
+
+                // Since the array is never considered empty in the view data format
+                // on submission, we need to evaluate the configured empty data here
+                if ([] === $data) {
+                    $emptyData = $form->getConfig()->getEmptyData();
+                    $data = $emptyData instanceof \Closure ? $emptyData($form, $data) : $emptyData;
+                }
+
+                $event->setData($data);
+            } elseif (!$requestHandler->isFileUpload($event->getData())) {
+                $event->setData(null);
+            }
+        });
     }
 
     /**
@@ -53,10 +70,10 @@ class FileType extends AbstractType
             $view->vars['attr']['multiple'] = 'multiple';
         }
 
-        $view->vars = array_replace($view->vars, array(
+        $view->vars = array_replace($view->vars, [
             'type' => 'file',
             'value' => '',
-        ));
+        ]);
     }
 
     /**
@@ -72,26 +89,30 @@ class FileType extends AbstractType
      */
     public function configureOptions(OptionsResolver $resolver)
     {
-        $dataClass = function (Options $options) {
-            return $options['multiple'] ? null : 'Symfony\Component\HttpFoundation\File\File';
-        };
+        $dataClass = null;
+        if (class_exists('Symfony\Component\HttpFoundation\File\File')) {
+            $dataClass = function (Options $options) {
+                return $options['multiple'] ? null : 'Symfony\Component\HttpFoundation\File\File';
+            };
+        }
 
         $emptyData = function (Options $options) {
-            return $options['multiple'] ? array() : null;
+            return $options['multiple'] ? [] : null;
         };
 
-        $resolver->setDefaults(array(
+        $resolver->setDefaults([
             'compound' => false,
             'data_class' => $dataClass,
             'empty_data' => $emptyData,
             'multiple' => false,
-        ));
+            'allow_file_upload' => true,
+        ]);
     }
 
     /**
      * {@inheritdoc}
      */
-    public function getName()
+    public function getBlockPrefix()
     {
         return 'file';
     }

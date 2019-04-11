@@ -15,6 +15,8 @@ namespace Symfony\Component\Intl\DateFormatter\DateFormat;
  * Parser and formatter for AM/PM markers format.
  *
  * @author Igor Wiedler <igor@wiedler.ch>
+ *
+ * @internal
  */
 class AmPmTransformer extends Transformer
 {
@@ -39,8 +41,8 @@ class AmPmTransformer extends Transformer
      */
     public function extractDateOptions($matched, $length)
     {
-        return array(
+        return [
             'marker' => $matched,
-        );
+        ];
     }
 }

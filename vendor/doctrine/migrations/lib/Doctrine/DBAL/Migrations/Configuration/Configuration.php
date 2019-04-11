@@ -1,28 +1,18 @@
 <?php
-/*
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
- * This software consists of voluntary contributions made by many individuals
- * and is licensed under the LGPL. For more information, see
- * <http://www.doctrine-project.org>.
-*/
 
 namespace Doctrine\DBAL\Migrations\Configuration;
 
+use Doctrine\Common\EventArgs;
 use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Connections\MasterSlaveConnection;
+use Doctrine\DBAL\Migrations\FileQueryWriter;
+use Doctrine\DBAL\Migrations\Finder\MigrationDeepFinderInterface;
 use Doctrine\DBAL\Migrations\MigrationException;
 use Doctrine\DBAL\Migrations\OutputWriter;
+use Doctrine\DBAL\Migrations\QueryWriter;
 use Doctrine\DBAL\Migrations\Version;
+use Doctrine\DBAL\Migrations\Finder\MigrationFinderInterface;
+use Doctrine\DBAL\Migrations\Finder\RecursiveRegexFinder;
 use Doctrine\DBAL\Schema\Column;
 use Doctrine\DBAL\Schema\Table;
 use Doctrine\DBAL\Types\Type;
@@ -39,6 +29,23 @@ use Doctrine\DBAL\Types\Type;
  */
 class Configuration
 {
+    /**
+     * Configure versions to be organized by year.
+     */
+    const VERSIONS_ORGANIZATION_BY_YEAR = 'year';
+
+    /**
+     * Configure versions to be organized by year and month.
+     *
+     * @var string
+     */
+    const VERSIONS_ORGANIZATION_BY_YEAR_AND_MONTH = 'year_and_month';
+
+    /**
+     * The date format for new version numbers
+     */
+    const VERSION_FORMAT = 'YmdHis';
+
     /**
      * Name of this set of migrations
      *
@@ -68,11 +75,31 @@ class Configuration
     private $outputWriter;
 
     /**
+     * The migration finder implementation -- used to load migrations from a
+     * directory.
+     *
+     * @var MigrationFinderInterface
+     */
+    private $migrationFinder;
+
+    /**
+     * @var QueryWriter
+     */
+    private $queryWriter;
+
+    /**
      * The migration table name to track versions in
      *
      * @var string
      */
     private $migrationsTableName = 'doctrine_migration_versions';
+
+    /**
+     * The migration column name to track versions in
+     *
+     * @var string
+     */
+    private $migrationsColumnName = 'version';
 
     /**
      * The path to a directory where new migration classes will be written
@@ -93,21 +120,70 @@ class Configuration
      *
      * @var Version[]
      */
-    private $migrations = array();
+    private $migrations = [];
+
+    /**
+     * Versions are organized by year.
+     *
+     * @var boolean
+     */
+    private $migrationsAreOrganizedByYear = false;
+
+    /**
+     * Versions are organized by year and month.
+     *
+     * @var boolean
+     */
+    private $migrationsAreOrganizedByYearAndMonth = false;
+
+    /**
+     * The custom template path to be used in generate command
+     *
+     * @var string
+     */
+    private $customTemplate;
+
+    /**
+     * Prevent write queries.
+     *
+     * @var bool
+     */
+    private $isDryRun = false;
 
     /**
      * Construct a migration configuration object.
      *
-     * @param Connection   $connection   A Connection instance
-     * @param OutputWriter $outputWriter A OutputWriter instance
+     * @param Connection               $connection   A Connection instance
+     * @param OutputWriter             $outputWriter A OutputWriter instance
+     * @param MigrationFinderInterface $finder       Migration files finder
+     * @param QueryWriter|null         $queryWriter
      */
-    public function __construct(Connection $connection, OutputWriter $outputWriter = null)
+    public function __construct(
+        Connection $connection,
+        OutputWriter $outputWriter = null,
+        MigrationFinderInterface $finder = null,
+        QueryWriter $queryWriter = null
+    ) {
+        $this->connection      = $connection;
+        $this->outputWriter    = $outputWriter ?? new OutputWriter();
+        $this->migrationFinder = $finder ?? new RecursiveRegexFinder();
+        $this->queryWriter     = $queryWriter;
+    }
+
+    /**
+     * @return bool
+     */
+    public function areMigrationsOrganizedByYear()
     {
-        $this->connection = $connection;
-        if ($outputWriter === null) {
-            $outputWriter = new OutputWriter();
-        }
-        $this->outputWriter = $outputWriter;
+        return $this->migrationsAreOrganizedByYear;
+    }
+
+    /**
+     * @return bool
+     */
+    public function areMigrationsOrganizedByYearAndMonth()
+    {
+        return $this->migrationsAreOrganizedByYearAndMonth;
     }
 
     /**
@@ -117,10 +193,10 @@ class Configuration
      */
     public function validate()
     {
-        if (! $this->migrationsNamespace) {
+        if ( ! $this->migrationsNamespace) {
             throw MigrationException::migrationsNamespaceRequired();
         }
-        if (! $this->migrationsDirectory) {
+        if ( ! $this->migrationsDirectory) {
             throw MigrationException::migrationsDirectoryRequired();
         }
     }
@@ -146,6 +222,16 @@ class Configuration
     }
 
     /**
+     * Sets the output writer.
+     *
+     * @param OutputWriter $outputWriter
+     */
+    public function setOutputWriter(OutputWriter $outputWriter)
+    {
+        $this->outputWriter = $outputWriter;
+    }
+
+    /**
      * Returns the OutputWriter instance
      *
      * @return OutputWriter $outputWriter  The OutputWriter instance
@@ -161,17 +247,29 @@ class Configuration
      * @param string $version
      *
      * @return string The formatted version
+     * @deprecated
      */
     public function formatVersion($version)
     {
-        return sprintf('%s-%s-%s %s:%s:%s',
-            substr($version, 0, 4),
-            substr($version, 4, 2),
-            substr($version, 6, 2),
-            substr($version, 8, 2),
-            substr($version, 10, 2),
-            substr($version, 12, 2)
-        );
+        return $this->getDateTime($version);
+    }
+
+    /**
+     * Returns the datetime of a migration
+     *
+     * @param string $version
+     * @return string
+     */
+    public function getDateTime($version)
+    {
+        $datetime = str_replace('Version', '', $version);
+        $datetime = \DateTime::createFromFormat('YmdHis', $datetime);
+
+        if ($datetime === false) {
+            return '';
+        }
+
+        return $datetime->format('Y-m-d H:i:s');
     }
 
     /**
@@ -202,6 +300,36 @@ class Configuration
     public function getMigrationsTableName()
     {
         return $this->migrationsTableName;
+    }
+
+    /**
+     * Set the migration column name
+     *
+     * @param string $columnName The migration column name
+     */
+    public function setMigrationsColumnName($columnName)
+    {
+        $this->migrationsColumnName = $columnName;
+    }
+
+    /**
+     * Returns the migration column name
+     *
+     * @return string $migrationsColumnName The migration column name
+     */
+    public function getMigrationsColumnName()
+    {
+        return $this->migrationsColumnName;
+    }
+
+    /**
+     * Returns the quoted migration column name
+     *
+     * @return string The quouted migration column name
+     */
+    public function getQuotedMigrationsColumnName()
+    {
+        return $this->getMigrationsColumn()->getQuotedName($this->connection->getDatabasePlatform());
     }
 
     /**
@@ -245,6 +373,45 @@ class Configuration
     }
 
     /**
+     * Returns the custom template path
+     *
+     * @return string $customTemplate The custom template path
+     */
+    public function getCustomTemplate() : ?string
+    {
+        return $this->customTemplate;
+    }
+
+    /**
+     * Set the custom template path
+     *
+     * @param string $customTemplate The custom template path
+     */
+    public function setCustomTemplate(?string $customTemplate) : void
+    {
+        $this->customTemplate = $customTemplate;
+    }
+
+    /**
+     * Set the implementation of the migration finder.
+     *
+     * @param MigrationFinderInterface $finder The new migration finder
+     * @throws MigrationException
+     */
+    public function setMigrationsFinder(MigrationFinderInterface $finder)
+    {
+        if (($this->migrationsAreOrganizedByYear || $this->migrationsAreOrganizedByYearAndMonth)
+            && ! ($finder instanceof MigrationDeepFinderInterface)) {
+            throw MigrationException::configurationIncompatibleWithFinder(
+                'organize-migrations',
+                $finder
+            );
+        }
+
+        $this->migrationFinder = $finder;
+    }
+
+    /**
      * Register migrations from a given directory. Recursively finds all files
      * with the pattern VersionYYYYMMDDHHMMSS.php as the filename and registers
      * them as migrations.
@@ -255,21 +422,9 @@ class Configuration
      */
     public function registerMigrationsFromDirectory($path)
     {
-        $path = realpath($path);
-        $path = rtrim($path, '/');
-        $files = glob($path . '/Version*.php');
-        $versions = array();
-        if ($files) {
-            foreach ($files as $file) {
-                require_once $file;
-                $info = pathinfo($file);
-                $version = substr($info['filename'], 7);
-                $class = $this->migrationsNamespace . '\\' . $info['filename'];
-                $versions[] = $this->registerMigration($version, $class);
-            }
-        }
+        $this->validate();
 
-        return $versions;
+        return $this->registerMigrations($this->findMigrations($path));
     }
 
     /**
@@ -285,14 +440,16 @@ class Configuration
      */
     public function registerMigration($version, $class)
     {
+        $this->ensureMigrationClassExists($class);
+
         $version = (string) $version;
-        $class = (string) $class;
+        $class   = (string) $class;
         if (isset($this->migrations[$version])) {
             throw MigrationException::duplicateMigrationVersion($version, get_class($this->migrations[$version]));
         }
-        $version = new Version($this, $version, $class);
+        $version                                  = new Version($this, $version, $class);
         $this->migrations[$version->getVersion()] = $version;
-        ksort($this->migrations);
+        ksort($this->migrations, SORT_STRING);
 
         return $version;
     }
@@ -308,7 +465,7 @@ class Configuration
      */
     public function registerMigrations(array $migrations)
     {
-        $versions = array();
+        $versions = [];
         foreach ($migrations as $version => $class) {
             $versions[] = $this->registerMigration($version, $class);
         }
@@ -337,6 +494,10 @@ class Configuration
      */
     public function getVersion($version)
     {
+        if (empty($this->migrations)) {
+            $this->registerMigrationsFromDirectory($this->getMigrationsDirectory());
+        }
+
         if ( ! isset($this->migrations[$version])) {
             throw MigrationException::unknownMigrationVersion($version);
         }
@@ -353,6 +514,10 @@ class Configuration
      */
     public function hasVersion($version)
     {
+        if (empty($this->migrations)) {
+            $this->registerMigrationsFromDirectory($this->getMigrationsDirectory());
+        }
+
         return isset($this->migrations[$version]);
     }
 
@@ -365,9 +530,13 @@ class Configuration
      */
     public function hasVersionMigrated(Version $version)
     {
+        $this->connect();
         $this->createMigrationTable();
 
-        $version = $this->connection->fetchColumn("SELECT version FROM " . $this->migrationsTableName . " WHERE version = ?", array($version->getVersion()));
+        $version = $this->connection->fetchColumn(
+            "SELECT " . $this->getQuotedMigrationsColumnName() . " FROM " . $this->migrationsTableName . " WHERE " . $this->getQuotedMigrationsColumnName() . " = ?",
+            [$version->getVersion()]
+        );
 
         return $version !== false;
     }
@@ -381,13 +550,15 @@ class Configuration
     {
         $this->createMigrationTable();
 
-        $ret = $this->connection->fetchAll("SELECT version FROM " . $this->migrationsTableName);
-        $versions = array();
-        foreach ($ret as $version) {
-            $versions[] = current($version);
+        if ( ! $this->migrationTableCreated && $this->isDryRun) {
+            return [];
         }
 
-        return $versions;
+        $this->connect();
+
+        $ret = $this->connection->fetchAll("SELECT " . $this->getQuotedMigrationsColumnName() . " FROM " . $this->migrationsTableName);
+
+        return array_map('current', $ret);
     }
 
     /**
@@ -397,7 +568,12 @@ class Configuration
      */
     public function getAvailableVersions()
     {
-        $availableVersions = array();
+        $availableVersions = [];
+
+        if (empty($this->migrations)) {
+            $this->registerMigrationsFromDirectory($this->getMigrationsDirectory());
+        }
+
         foreach ($this->migrations as $migration) {
             $availableVersions[] = $migration->getVersion();
         }
@@ -414,20 +590,34 @@ class Configuration
     {
         $this->createMigrationTable();
 
+        if ( ! $this->migrationTableCreated && $this->isDryRun) {
+            return '0';
+        }
+
+        $this->connect();
+
+        if (empty($this->migrations)) {
+            $this->registerMigrationsFromDirectory($this->getMigrationsDirectory());
+        }
+
         $where = null;
-        if ($this->migrations) {
-            $migratedVersions = array();
+        if ( ! empty($this->migrations)) {
+            $migratedVersions = [];
             foreach ($this->migrations as $migration) {
                 $migratedVersions[] = sprintf("'%s'", $migration->getVersion());
             }
-            $where = " WHERE version IN (" . implode(', ', $migratedVersions) . ")";
+            $where = " WHERE " . $this->getQuotedMigrationsColumnName() . " IN (" . implode(', ', $migratedVersions) . ")";
         }
 
-        $sql = sprintf("SELECT version FROM %s%s ORDER BY version DESC",
-            $this->migrationsTableName, $where
+        $sql = sprintf(
+            "SELECT %s FROM %s%s ORDER BY %s DESC",
+            $this->getQuotedMigrationsColumnName(),
+            $this->migrationsTableName,
+            $where,
+            $this->getQuotedMigrationsColumnName()
         );
 
-        $sql = $this->connection->getDatabasePlatform()->modifyLimitQuery($sql, 1);
+        $sql    = $this->connection->getDatabasePlatform()->modifyLimitQuery($sql, 1);
         $result = $this->connection->fetchColumn($sql);
 
         return $result !== false ? (string) $result : '0';
@@ -458,21 +648,50 @@ class Configuration
     /**
      * Returns the version with the specified offset to the specified version.
      *
-     * @return string|null A version string, or null if the specified version
+     * @param string $version
+     * @param string $delta
+     * @return null|string A version string, or null if the specified version
      *                     is unknown or the specified delta is not within the
      *                     list of available versions.
      */
     public function getRelativeVersion($version, $delta)
     {
-        $versions = array_keys($this->migrations);
-        array_unshift($versions, 0);
-        $offset = array_search($version, $versions);
-        if ($offset === false || !isset($versions[$offset + $delta])) {
+        if (empty($this->migrations)) {
+            $this->registerMigrationsFromDirectory($this->getMigrationsDirectory());
+        }
+
+        $versions = array_map('strval', array_keys($this->migrations));
+        array_unshift($versions, '0');
+        $offset = array_search((string) $version, $versions, true);
+        if ($offset === false || ! isset($versions[$offset + $delta])) {
             // Unknown version or delta out of bounds.
             return null;
         }
 
-        return (string) $versions[$offset + $delta];
+        return $versions[$offset + $delta];
+    }
+
+    /**
+     * Returns the version with the specified to the current version.
+     *
+     * @param string $delta
+     * @return null|string A version string, or null if the specified delta is
+     *                     not within the list of available versions.
+     */
+    public function getDeltaVersion($delta)
+    {
+        $symbol = substr($delta, 0, 1);
+        $number = (int) substr($delta, 1);
+
+        if ($number <= 0) {
+            return null;
+        }
+
+        if ($symbol == "+" || $symbol == "-") {
+            return $this->getRelativeVersion($this->getCurrentVersion(), (int) $delta);
+        }
+
+        return null;
     }
 
     /**
@@ -487,7 +706,8 @@ class Configuration
      *
      * If an existing version number is specified, it is returned verbatimly.
      *
-     * @return string|null A version number, or null if the specified alias
+     * @param string $alias
+     * @return null|string A version number, or null if the specified alias
      *                     does not map to an existing version, e.g. if "next"
      *                     is passed but the current version is already the
      *                     latest.
@@ -509,6 +729,9 @@ class Configuration
             case 'latest':
                 return $this->getLatestVersion();
             default:
+                if (substr($alias, 0, 7) == 'current') {
+                    return $this->getDeltaVersion(substr($alias, 7));
+                }
                 return null;
         }
     }
@@ -520,9 +743,10 @@ class Configuration
      */
     public function getNumberOfExecutedMigrations()
     {
+        $this->connect();
         $this->createMigrationTable();
 
-        $result = $this->connection->fetchColumn("SELECT COUNT(version) FROM " . $this->migrationsTableName);
+        $result = $this->connection->fetchColumn("SELECT COUNT(" . $this->getQuotedMigrationsColumnName() . ") FROM " . $this->migrationsTableName);
 
         return $result !== false ? $result : 0;
     }
@@ -534,6 +758,10 @@ class Configuration
      */
     public function getNumberOfAvailableMigrations()
     {
+        if (empty($this->migrations)) {
+            $this->registerMigrationsFromDirectory($this->getMigrationsDirectory());
+        }
+
         return count($this->migrations);
     }
 
@@ -544,8 +772,12 @@ class Configuration
      */
     public function getLatestVersion()
     {
+        if (empty($this->migrations)) {
+            $this->registerMigrationsFromDirectory($this->getMigrationsDirectory());
+        }
+
         $versions = array_keys($this->migrations);
-        $latest = end($versions);
+        $latest   = end($versions);
 
         return $latest !== false ? (string) $latest : '0';
     }
@@ -563,22 +795,27 @@ class Configuration
             return false;
         }
 
-        if ( ! $this->connection->getSchemaManager()->tablesExist(array($this->migrationsTableName))) {
-            $columns = array(
-                'version' => new Column('version', Type::getType('string'), array('length' => 255)),
-            );
-            $table = new Table($this->migrationsTableName, $columns);
-            $table->setPrimaryKey(array('version'));
-            $this->connection->getSchemaManager()->createTable($table);
-
+        $this->connect();
+        if ($this->connection->getSchemaManager()->tablesExist([$this->migrationsTableName])) {
             $this->migrationTableCreated = true;
 
-            return true;
+            return false;
         }
+
+        if ($this->isDryRun) {
+            return false;
+        }
+
+        $columns = [
+            $this->migrationsColumnName => $this->getMigrationsColumn(),
+        ];
+        $table   = new Table($this->migrationsTableName, $columns);
+        $table->setPrimaryKey([$this->migrationsColumnName]);
+        $this->connection->getSchemaManager()->createTable($table);
 
         $this->migrationTableCreated = true;
 
-        return false;
+        return true;
     }
 
     /**
@@ -592,18 +829,22 @@ class Configuration
      */
     public function getMigrationsToExecute($direction, $to)
     {
-        if ($direction === 'down') {
+        if (empty($this->migrations)) {
+            $this->registerMigrationsFromDirectory($this->getMigrationsDirectory());
+        }
+
+        if ($direction === Version::DIRECTION_DOWN) {
             if (count($this->migrations)) {
                 $allVersions = array_reverse(array_keys($this->migrations));
-                $classes = array_reverse(array_values($this->migrations));
+                $classes     = array_reverse(array_values($this->migrations));
                 $allVersions = array_combine($allVersions, $classes);
             } else {
-                $allVersions = array();
+                $allVersions = [];
             }
         } else {
             $allVersions = $this->migrations;
         }
-        $versions = array();
+        $versions = [];
         $migrated = $this->getMigratedVersions();
         foreach ($allVersions as $version) {
             if ($this->shouldExecuteMigration($direction, $version, $to, $migrated)) {
@@ -612,6 +853,95 @@ class Configuration
         }
 
         return $versions;
+    }
+
+    /**
+     * Use the connection's event manager to emit an event.
+     *
+     * @param string $eventName The event to emit.
+     * @param EventArgs $args The event args instance to emit.
+     */
+    public function dispatchEvent($eventName, EventArgs $args = null)
+    {
+        $this->connection->getEventManager()->dispatchEvent($eventName, $args);
+    }
+
+    /**
+     * Find all the migrations in a given directory.
+     *
+     * @param   string $path the directory to search.
+     * @return  array
+     */
+    protected function findMigrations($path)
+    {
+        return $this->migrationFinder->findMigrations($path, $this->getMigrationsNamespace());
+    }
+
+    /**
+     * @param bool $migrationsAreOrganizedByYear
+     * @throws MigrationException
+     */
+    public function setMigrationsAreOrganizedByYear($migrationsAreOrganizedByYear = true)
+    {
+        $this->ensureOrganizeMigrationsIsCompatibleWithFinder();
+
+        $this->migrationsAreOrganizedByYear = $migrationsAreOrganizedByYear;
+    }
+
+    /**
+     * @param bool $migrationsAreOrganizedByYearAndMonth
+     * @throws MigrationException
+     */
+    public function setMigrationsAreOrganizedByYearAndMonth($migrationsAreOrganizedByYearAndMonth = true)
+    {
+        $this->ensureOrganizeMigrationsIsCompatibleWithFinder();
+
+        $this->migrationsAreOrganizedByYear         = $migrationsAreOrganizedByYearAndMonth;
+        $this->migrationsAreOrganizedByYearAndMonth = $migrationsAreOrganizedByYearAndMonth;
+    }
+
+    /**
+     * Generate a new migration version. A version is (usually) a datetime string.
+     *
+     * @param \DateTimeInterface|null $now Defaults to the current time in UTC
+     * @return string The newly generated version
+     */
+    public function generateVersionNumber(\DateTimeInterface $now = null)
+    {
+        $now = $now ?: new \DateTime('now', new \DateTimeZone('UTC'));
+
+        return $now->format(self::VERSION_FORMAT);
+    }
+
+    /**
+     * Explicitely opens the database connection. This is done to play nice
+     * with DBAL's MasterSlaveConnection. Which, in some cases, connects to a
+     * follower when fetching the executed migrations. If a follower is lagging
+     * significantly behind that means the migrations system may see unexecuted
+     * migrations that were actually executed earlier.
+     *
+     * @return bool The same value returned from the `connect` method
+     */
+    protected function connect()
+    {
+        if ($this->connection instanceof MasterSlaveConnection) {
+            return $this->connection->connect('master');
+        }
+
+        return $this->connection->connect();
+    }
+
+    /**
+     * @throws MigrationException
+     */
+    private function ensureOrganizeMigrationsIsCompatibleWithFinder()
+    {
+        if ( ! ($this->migrationFinder instanceof MigrationDeepFinderInterface)) {
+            throw MigrationException::configurationIncompatibleWithFinder(
+                'organize-migrations',
+                $this->migrationFinder
+            );
+        }
     }
 
     /**
@@ -627,20 +957,57 @@ class Configuration
      */
     private function shouldExecuteMigration($direction, Version $version, $to, $migrated)
     {
-        if ($direction === 'down') {
-            if ( ! in_array($version->getVersion(), $migrated)) {
+        if ($direction === Version::DIRECTION_DOWN) {
+            if ( ! in_array($version->getVersion(), $migrated, true)) {
                 return false;
             }
 
             return $version->getVersion() > $to;
         }
 
-        if ($direction === 'up') {
-            if (in_array($version->getVersion(), $migrated)) {
+        if ($direction === Version::DIRECTION_UP) {
+            if (in_array($version->getVersion(), $migrated, true)) {
                 return false;
             }
 
             return $version->getVersion() <= $to;
         }
+    }
+
+    /**
+     * @param string $class
+     * @throws MigrationException
+     */
+    private function ensureMigrationClassExists($class)
+    {
+        if ( ! class_exists($class)) {
+            throw MigrationException::migrationClassNotFound($class, $this->getMigrationsNamespace());
+        }
+    }
+
+    public function getQueryWriter() : QueryWriter
+    {
+        if ($this->queryWriter === null) {
+            $this->queryWriter = new FileQueryWriter(
+                $this->getQuotedMigrationsColumnName(),
+                $this->migrationsTableName,
+                $this->outputWriter
+            );
+        }
+
+        return $this->queryWriter;
+    }
+
+    /**
+     * @param bool $isDryRun
+     */
+    public function setIsDryRun($isDryRun)
+    {
+        $this->isDryRun = $isDryRun;
+    }
+
+    private function getMigrationsColumn() : Column
+    {
+        return new Column($this->migrationsColumnName, Type::getType('string'), ['length' => 255]);
     }
 }

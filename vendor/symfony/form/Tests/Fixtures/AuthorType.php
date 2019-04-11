@@ -16,15 +16,10 @@ class AuthorType extends AbstractType
         ;
     }
 
-    public function getName()
-    {
-        return 'author';
-    }
-
     public function configureOptions(OptionsResolver $resolver)
     {
-        $resolver->setDefaults(array(
+        $resolver->setDefaults([
             'data_class' => 'Symfony\Component\Form\Tests\Fixtures\Author',
-        ));
+        ]);
     }
 }

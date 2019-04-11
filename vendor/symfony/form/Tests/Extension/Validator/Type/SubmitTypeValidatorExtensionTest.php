@@ -11,10 +11,14 @@
 
 namespace Symfony\Component\Form\Tests\Extension\Validator\Type;
 
+use Symfony\Component\Form\Test\Traits\ValidatorExtensionTrait;
+
 class SubmitTypeValidatorExtensionTest extends BaseValidatorExtensionTest
 {
-    protected function createForm(array $options = array())
+    use ValidatorExtensionTrait;
+
+    protected function createForm(array $options = [])
     {
-        return $this->factory->create('submit', null, $options);
+        return $this->factory->create('Symfony\Component\Form\Extension\Core\Type\SubmitType', null, $options);
     }
 }

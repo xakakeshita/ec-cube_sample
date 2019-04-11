@@ -13,14 +13,17 @@ namespace Symfony\Bridge\Twig\Tests\Extension;
 
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Twig\Extension\HttpKernelExtension;
+use Symfony\Bridge\Twig\Extension\HttpKernelRuntime;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Fragment\FragmentHandler;
+use Twig\Environment;
+use Twig\Loader\ArrayLoader;
 
 class HttpKernelExtensionTest extends TestCase
 {
     /**
-     * @expectedException \Twig_Error_Runtime
+     * @expectedException \Twig\Error\RuntimeError
      */
     public function testFragmentWithError()
     {
@@ -44,7 +47,7 @@ class HttpKernelExtensionTest extends TestCase
             ->disableOriginalConstructor()
             ->getMock()
         ;
-        $renderer = new FragmentHandler(array(), false, $context);
+        $renderer = new FragmentHandler($context);
 
         if (method_exists($this, 'expectException')) {
             $this->expectException('InvalidArgumentException');
@@ -69,14 +72,20 @@ class HttpKernelExtensionTest extends TestCase
 
         $context->expects($this->any())->method('getCurrentRequest')->will($this->returnValue(Request::create('/')));
 
-        return new FragmentHandler(array($strategy), false, $context);
+        return new FragmentHandler($context, [$strategy], false);
     }
 
     protected function renderTemplate(FragmentHandler $renderer, $template = '{{ render("foo") }}')
     {
-        $loader = new \Twig_Loader_Array(array('index' => $template));
-        $twig = new \Twig_Environment($loader, array('debug' => true, 'cache' => false));
-        $twig->addExtension(new HttpKernelExtension($renderer));
+        $loader = new ArrayLoader(['index' => $template]);
+        $twig = new Environment($loader, ['debug' => true, 'cache' => false]);
+        $twig->addExtension(new HttpKernelExtension());
+
+        $loader = $this->getMockBuilder('Twig\RuntimeLoader\RuntimeLoaderInterface')->getMock();
+        $loader->expects($this->any())->method('load')->will($this->returnValueMap([
+            ['Symfony\Bridge\Twig\Extension\HttpKernelRuntime', new HttpKernelRuntime($renderer)],
+        ]));
+        $twig->addRuntimeLoader($loader);
 
         return $twig->render('index');
     }

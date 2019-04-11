@@ -23,13 +23,13 @@ class FooTypeBarExtension extends AbstractTypeExtension
 
     public function getAllowedOptionValues()
     {
-        return array(
-            'a_or_b' => array('c'),
-        );
+        return [
+            'a_or_b' => ['c'],
+        ];
     }
 
     public function getExtendedType()
     {
-        return 'foo';
+        return __NAMESPACE__.'\FooType';
     }
 }

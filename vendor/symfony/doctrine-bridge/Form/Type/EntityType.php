@@ -28,10 +28,10 @@ class EntityType extends DoctrineType
         // Invoke the query builder closure so that we can cache choice lists
         // for equal query builders
         $queryBuilderNormalizer = function (Options $options, $queryBuilder) {
-            if (is_callable($queryBuilder)) {
-                $queryBuilder = call_user_func($queryBuilder, $options['em']->getRepository($options['class']));
+            if (\is_callable($queryBuilder)) {
+                $queryBuilder = \call_user_func($queryBuilder, $options['em']->getRepository($options['class']));
 
-                if (!$queryBuilder instanceof QueryBuilder) {
+                if (null !== $queryBuilder && !$queryBuilder instanceof QueryBuilder) {
                     throw new UnexpectedTypeException($queryBuilder, 'Doctrine\ORM\QueryBuilder');
                 }
             }
@@ -40,7 +40,7 @@ class EntityType extends DoctrineType
         };
 
         $resolver->setNormalizer('query_builder', $queryBuilderNormalizer);
-        $resolver->setAllowedTypes('query_builder', array('null', 'callable', 'Doctrine\ORM\QueryBuilder'));
+        $resolver->setAllowedTypes('query_builder', ['null', 'callable', 'Doctrine\ORM\QueryBuilder']);
     }
 
     /**
@@ -54,10 +54,13 @@ class EntityType extends DoctrineType
      */
     public function getLoader(ObjectManager $manager, $queryBuilder, $class)
     {
-        return new ORMQueryBuilderLoader($queryBuilder, $manager, $class);
+        return new ORMQueryBuilderLoader($queryBuilder);
     }
 
-    public function getName()
+    /**
+     * {@inheritdoc}
+     */
+    public function getBlockPrefix()
     {
         return 'entity';
     }
@@ -75,21 +78,19 @@ class EntityType extends DoctrineType
      */
     public function getQueryBuilderPartsForCachingHash($queryBuilder)
     {
-        return array(
+        return [
             $queryBuilder->getQuery()->getSQL(),
-            array_map(array($this, 'parameterToArray'), $queryBuilder->getParameters()->toArray()),
-        );
+            array_map([$this, 'parameterToArray'], $queryBuilder->getParameters()->toArray()),
+        ];
     }
 
     /**
      * Converts a query parameter to an array.
      *
-     * @param Parameter $parameter The query parameter
-     *
      * @return array The array representation of the parameter
      */
     private function parameterToArray(Parameter $parameter)
     {
-        return array($parameter->getName(), $parameter->getType(), $parameter->getValue());
+        return [$parameter->getName(), $parameter->getType(), $parameter->getValue()];
     }
 }

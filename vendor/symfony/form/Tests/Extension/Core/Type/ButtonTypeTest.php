@@ -16,10 +16,22 @@ namespace Symfony\Component\Form\Tests\Extension\Core\Type;
  */
 class ButtonTypeTest extends BaseTypeTest
 {
-    const TESTED_TYPE = 'button';
+    const TESTED_TYPE = 'Symfony\Component\Form\Extension\Core\Type\ButtonType';
 
     public function testCreateButtonInstances()
     {
         $this->assertInstanceOf('Symfony\Component\Form\Button', $this->factory->create(static::TESTED_TYPE));
+    }
+
+    /**
+     * @expectedException \Symfony\Component\Form\Exception\BadMethodCallException
+     * @expectedExceptionMessage Buttons do not support empty data.
+     *
+     * @param string $emptyData
+     * @param null   $expectedData
+     */
+    public function testSubmitNullUsesDefaultEmptyData($emptyData = 'empty', $expectedData = null)
+    {
+        parent::testSubmitNullUsesDefaultEmptyData($emptyData, $expectedData);
     }
 }

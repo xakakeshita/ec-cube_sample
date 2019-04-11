@@ -12,8 +12,8 @@
 namespace Symfony\Component\Form;
 
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
-use Symfony\Component\Form\Exception\InvalidArgumentException;
 use Symfony\Component\Form\Exception\BadMethodCallException;
+use Symfony\Component\Form\Exception\InvalidArgumentException;
 
 /**
  * A builder for {@link Button} instances.
@@ -45,7 +45,7 @@ class ButtonBuilder implements \IteratorAggregate, FormBuilderInterface
     /**
      * @var array
      */
-    private $attributes = array();
+    private $attributes = [];
 
     /**
      * @var array
@@ -58,9 +58,9 @@ class ButtonBuilder implements \IteratorAggregate, FormBuilderInterface
      * @param string $name    The name of the button
      * @param array  $options The button's options
      *
-     * @throws InvalidArgumentException If the name is empty.
+     * @throws InvalidArgumentException if the name is empty
      */
-    public function __construct($name, array $options = array())
+    public function __construct($name, array $options = [])
     {
         $name = (string) $name;
         if ('' === $name) {
@@ -82,7 +82,7 @@ class ButtonBuilder implements \IteratorAggregate, FormBuilderInterface
      *
      * @throws BadMethodCallException
      */
-    public function add($child, $type = null, array $options = array())
+    public function add($child, $type = null, array $options = [])
     {
         throw new BadMethodCallException('Buttons cannot have children.');
     }
@@ -98,7 +98,7 @@ class ButtonBuilder implements \IteratorAggregate, FormBuilderInterface
      *
      * @throws BadMethodCallException
      */
-    public function create($name, $type = null, array $options = array())
+    public function create($name, $type = null, array $options = [])
     {
         throw new BadMethodCallException('Buttons cannot have children.');
     }
@@ -150,7 +150,7 @@ class ButtonBuilder implements \IteratorAggregate, FormBuilderInterface
      */
     public function all()
     {
-        return array();
+        return [];
     }
 
     /**
@@ -183,8 +183,6 @@ class ButtonBuilder implements \IteratorAggregate, FormBuilderInterface
      * Unsupported method.
      *
      * This method should not be invoked.
-     *
-     * @param EventSubscriberInterface $subscriber
      *
      * @throws BadMethodCallException
      */
@@ -271,8 +269,6 @@ class ButtonBuilder implements \IteratorAggregate, FormBuilderInterface
      * Unsupported method.
      *
      * This method should not be invoked.
-     *
-     * @param DataMapperInterface $dataMapper
      *
      * @throws BadMethodCallException
      */
@@ -384,23 +380,6 @@ class ButtonBuilder implements \IteratorAggregate, FormBuilderInterface
      *
      * This method should not be invoked.
      *
-     * @param bool $virtual
-     *
-     * @throws BadMethodCallException
-     *
-     * @deprecated since version 2.3, to be removed in 3.0. Use
-     *             {@link setInheritData()} instead.
-     */
-    public function setVirtual($virtual)
-    {
-        throw new BadMethodCallException('Buttons cannot be virtual.');
-    }
-
-    /**
-     * Unsupported method.
-     *
-     * This method should not be invoked.
-     *
      * @param bool $compound
      *
      * @throws BadMethodCallException
@@ -412,8 +391,6 @@ class ButtonBuilder implements \IteratorAggregate, FormBuilderInterface
 
     /**
      * Sets the type of the button.
-     *
-     * @param ResolvedFormTypeInterface $type The type of the button
      *
      * @return $this
      */
@@ -457,8 +434,6 @@ class ButtonBuilder implements \IteratorAggregate, FormBuilderInterface
      *
      * This method should not be invoked.
      *
-     * @param FormFactoryInterface $formFactory
-     *
      * @throws BadMethodCallException
      */
     public function setFormFactory(FormFactoryInterface $formFactory)
@@ -492,8 +467,6 @@ class ButtonBuilder implements \IteratorAggregate, FormBuilderInterface
 
     /**
      * Unsupported method.
-     *
-     * @param RequestHandlerInterface $requestHandler
      *
      * @throws BadMethodCallException
      */
@@ -592,21 +565,6 @@ class ButtonBuilder implements \IteratorAggregate, FormBuilderInterface
      * Unsupported method.
      *
      * @return bool Always returns false
-     *
-     * @deprecated since version 2.3, to be removed in 3.0.
-     *             Use {@link getInheritData()} instead.
-     */
-    public function getVirtual()
-    {
-        @trigger_error('The '.__METHOD__.' method is deprecated since version 2.3 and will be removed in 3.0. Use the Symfony\Component\Form\FormConfigBuilder::getInheritData method instead.', E_USER_DEPRECATED);
-
-        return false;
-    }
-
-    /**
-     * Unsupported method.
-     *
-     * @return bool Always returns false
      */
     public function getCompound()
     {
@@ -630,7 +588,7 @@ class ButtonBuilder implements \IteratorAggregate, FormBuilderInterface
      */
     public function getViewTransformers()
     {
-        return array();
+        return [];
     }
 
     /**
@@ -640,7 +598,7 @@ class ButtonBuilder implements \IteratorAggregate, FormBuilderInterface
      */
     public function getModelTransformers()
     {
-        return array();
+        return [];
     }
 
     /**

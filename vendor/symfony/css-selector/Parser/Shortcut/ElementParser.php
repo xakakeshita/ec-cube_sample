@@ -22,6 +22,8 @@ use Symfony\Component\CssSelector\Parser\ParserInterface;
  * which is copyright Ian Bicking, @see https://github.com/SimonSapin/cssselect.
  *
  * @author Jean-François Simon <jeanfrancois.simon@sensiolabs.com>
+ *
+ * @internal
  */
 class ElementParser implements ParserInterface
 {
@@ -37,9 +39,9 @@ class ElementParser implements ParserInterface
         //     1 => string 'testns' (length=6)
         //     2 => string 'testel' (length=6)
         if (preg_match('/^(?:([a-z]++)\|)?([\w-]++|\*)$/i', trim($source), $matches)) {
-            return array(new SelectorNode(new ElementNode($matches[1] ?: null, $matches[2])));
+            return [new SelectorNode(new ElementNode($matches[1] ?: null, $matches[2]))];
         }
 
-        return array();
+        return [];
     }
 }

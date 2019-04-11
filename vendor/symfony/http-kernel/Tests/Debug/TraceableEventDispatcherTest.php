@@ -13,10 +13,11 @@ namespace Symfony\Component\HttpKernel\Tests\Debug;
 
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\EventDispatcher\EventDispatcher;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Debug\TraceableEventDispatcher;
 use Symfony\Component\HttpKernel\HttpKernel;
-use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Stopwatch\Stopwatch;
 
 class TraceableEventDispatcherTest extends TestCase
@@ -30,20 +31,21 @@ class TraceableEventDispatcherTest extends TestCase
         $kernel->terminate($request, $response);
 
         $events = $stopwatch->getSectionEvents($response->headers->get('X-Debug-Token'));
-        $this->assertEquals(array(
+        $this->assertEquals([
             '__section__',
             'kernel.request',
             'kernel.controller',
+            'kernel.controller_arguments',
             'controller',
             'kernel.response',
             'kernel.terminate',
-        ), array_keys($events));
+        ], array_keys($events));
     }
 
     public function testStopwatchCheckControllerOnRequestEvent()
     {
         $stopwatch = $this->getMockBuilder('Symfony\Component\Stopwatch\Stopwatch')
-            ->setMethods(array('isStarted'))
+            ->setMethods(['isStarted'])
             ->getMock();
         $stopwatch->expects($this->once())
             ->method('isStarted')
@@ -59,7 +61,7 @@ class TraceableEventDispatcherTest extends TestCase
     public function testStopwatchStopControllerOnRequestEvent()
     {
         $stopwatch = $this->getMockBuilder('Symfony\Component\Stopwatch\Stopwatch')
-            ->setMethods(array('isStarted', 'stop', 'stopSection'))
+            ->setMethods(['isStarted', 'stop', 'stopSection'])
             ->getMock();
         $stopwatch->expects($this->once())
             ->method('isStarted')
@@ -109,10 +111,11 @@ class TraceableEventDispatcherTest extends TestCase
 
     protected function getHttpKernel($dispatcher, $controller)
     {
-        $resolver = $this->getMockBuilder('Symfony\Component\HttpKernel\Controller\ControllerResolverInterface')->getMock();
-        $resolver->expects($this->once())->method('getController')->will($this->returnValue($controller));
-        $resolver->expects($this->once())->method('getArguments')->will($this->returnValue(array()));
+        $controllerResolver = $this->getMockBuilder('Symfony\Component\HttpKernel\Controller\ControllerResolverInterface')->getMock();
+        $controllerResolver->expects($this->once())->method('getController')->will($this->returnValue($controller));
+        $argumentResolver = $this->getMockBuilder('Symfony\Component\HttpKernel\Controller\ArgumentResolverInterface')->getMock();
+        $argumentResolver->expects($this->once())->method('getArguments')->will($this->returnValue([]));
 
-        return new HttpKernel($dispatcher, $resolver);
+        return new HttpKernel($dispatcher, $controllerResolver, new RequestStack(), $argumentResolver);
     }
 }

@@ -15,7 +15,7 @@ use Symfony\Component\Intl\Util\IntlTestHelper;
 
 class IntegerTypeTest extends BaseTypeTest
 {
-    const TESTED_TYPE = 'integer';
+    const TESTED_TYPE = 'Symfony\Component\Form\Extension\Core\Type\IntegerType';
 
     protected function setUp()
     {
@@ -37,5 +37,17 @@ class IntegerTypeTest extends BaseTypeTest
     public function testSubmitNull($expected = null, $norm = null, $view = null)
     {
         parent::testSubmitNull($expected, $norm, '');
+    }
+
+    public function testSubmitNullUsesDefaultEmptyData($emptyData = '10', $expectedData = 10)
+    {
+        $form = $this->factory->create(static::TESTED_TYPE, null, [
+            'empty_data' => $emptyData,
+        ]);
+        $form->submit(null);
+
+        $this->assertSame($emptyData, $form->getViewData());
+        $this->assertSame($expectedData, $form->getNormData());
+        $this->assertSame($expectedData, $form->getData());
     }
 }

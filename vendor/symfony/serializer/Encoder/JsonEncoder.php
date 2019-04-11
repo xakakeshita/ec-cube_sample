@@ -20,14 +20,7 @@ class JsonEncoder implements EncoderInterface, DecoderInterface
 {
     const FORMAT = 'json';
 
-    /**
-     * @var JsonEncode
-     */
     protected $encodingImpl;
-
-    /**
-     * @var JsonDecode
-     */
     protected $decodingImpl;
 
     public function __construct(JsonEncode $encodingImpl = null, JsonDecode $decodingImpl = null)
@@ -37,37 +30,9 @@ class JsonEncoder implements EncoderInterface, DecoderInterface
     }
 
     /**
-     * Returns the last encoding error (if any).
-     *
-     * @return int
-     *
-     * @deprecated since version 2.5, to be removed in 3.0. JsonEncode throws exception if an error is found.
-     */
-    public function getLastEncodingError()
-    {
-        @trigger_error('The '.__METHOD__.' method is deprecated since version 2.5 and will be removed in 3.0. Catch the exception raised by the Symfony\Component\Serializer\Encoder\JsonEncode::encode() method instead to get the last JSON encoding error.', E_USER_DEPRECATED);
-
-        return $this->encodingImpl->getLastError();
-    }
-
-    /**
-     * Returns the last decoding error (if any).
-     *
-     * @return int
-     *
-     * @deprecated since version 2.5, to be removed in 3.0. JsonDecode throws exception if an error is found.
-     */
-    public function getLastDecodingError()
-    {
-        @trigger_error('The '.__METHOD__.' method is deprecated since version 2.5 and will be removed in 3.0. Catch the exception raised by the Symfony\Component\Serializer\Encoder\JsonDecode::decode() method instead to get the last JSON decoding error.', E_USER_DEPRECATED);
-
-        return $this->decodingImpl->getLastError();
-    }
-
-    /**
      * {@inheritdoc}
      */
-    public function encode($data, $format, array $context = array())
+    public function encode($data, $format, array $context = [])
     {
         return $this->encodingImpl->encode($data, self::FORMAT, $context);
     }
@@ -75,7 +40,7 @@ class JsonEncoder implements EncoderInterface, DecoderInterface
     /**
      * {@inheritdoc}
      */
-    public function decode($data, $format, array $context = array())
+    public function decode($data, $format, array $context = [])
     {
         return $this->decodingImpl->decode($data, self::FORMAT, $context);
     }
@@ -94,32 +59,5 @@ class JsonEncoder implements EncoderInterface, DecoderInterface
     public function supportsDecoding($format)
     {
         return self::FORMAT === $format;
-    }
-
-    /**
-     * Resolves json_last_error message.
-     *
-     * @return string
-     */
-    public static function getLastErrorMessage()
-    {
-        if (function_exists('json_last_error_msg')) {
-            return json_last_error_msg();
-        }
-
-        switch (json_last_error()) {
-            case JSON_ERROR_DEPTH:
-                return 'Maximum stack depth exceeded';
-            case JSON_ERROR_STATE_MISMATCH:
-                return 'Underflow or the modes mismatch';
-            case JSON_ERROR_CTRL_CHAR:
-                return 'Unexpected control character found';
-            case JSON_ERROR_SYNTAX:
-                return 'Syntax error, malformed JSON';
-            case JSON_ERROR_UTF8:
-                return 'Malformed UTF-8 characters, possibly incorrectly encoded';
-            default:
-                return 'Unknown error';
-        }
     }
 }

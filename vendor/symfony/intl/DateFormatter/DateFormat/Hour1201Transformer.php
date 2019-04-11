@@ -15,6 +15,8 @@ namespace Symfony\Component\Intl\DateFormatter\DateFormat;
  * Parser and formatter for 12 hour format (1-12).
  *
  * @author Igor Wiedler <igor@wiedler.ch>
+ *
+ * @internal
  */
 class Hour1201Transformer extends HourTransformer
 {
@@ -54,9 +56,9 @@ class Hour1201Transformer extends HourTransformer
      */
     public function extractDateOptions($matched, $length)
     {
-        return array(
+        return [
             'hour' => (int) $matched,
             'hourInstance' => $this,
-        );
+        ];
     }
 }

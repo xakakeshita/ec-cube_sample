@@ -23,8 +23,8 @@ class RememberMeTokenTest extends TestCase
         $token = new RememberMeToken($user, 'fookey', 'foo');
 
         $this->assertEquals('fookey', $token->getProviderKey());
-        $this->assertEquals('foo', $token->getKey());
-        $this->assertEquals(array(new Role('ROLE_FOO')), $token->getRoles());
+        $this->assertEquals('foo', $token->getSecret());
+        $this->assertEquals([new Role('ROLE_FOO')], $token->getRoles());
         $this->assertSame($user, $token->getUser());
         $this->assertTrue($token->isAuthenticated());
     }
@@ -32,7 +32,7 @@ class RememberMeTokenTest extends TestCase
     /**
      * @expectedException \InvalidArgumentException
      */
-    public function testConstructorKeyCannotBeNull()
+    public function testConstructorSecretCannotBeNull()
     {
         new RememberMeToken(
             $this->getUser(),
@@ -44,7 +44,7 @@ class RememberMeTokenTest extends TestCase
     /**
      * @expectedException \InvalidArgumentException
      */
-    public function testConstructorKeyCannotBeEmptyString()
+    public function testConstructorSecretCannotBeEmptyString()
     {
         new RememberMeToken(
             $this->getUser(),
@@ -53,7 +53,7 @@ class RememberMeTokenTest extends TestCase
         );
     }
 
-    protected function getUser($roles = array('ROLE_FOO'))
+    protected function getUser($roles = ['ROLE_FOO'])
     {
         $user = $this->getMockBuilder('Symfony\Component\Security\Core\User\UserInterface')->getMock();
         $user
